@@ -181,29 +181,109 @@
   @media (max-height:500px) { #noteui { display:none; } #phase { display:none; } }
 
   /* ── BOTÃO oscilloID — canto inferior esquerdo ────────────────────────────── */
+  @keyframes oscilloID-pulse {
+    0%   { color:rgba(180,255,220,0.92); border-color:rgba(180,255,220,0.55); box-shadow:0 0 12px rgba(180,255,220,0.18); }
+    45%  { color:rgba(93,202,165,0.60);  border-color:rgba(93,202,165,0.28);  box-shadow:0 0 4px  rgba(93,202,165,0.06);  }
+    100% { color:rgba(180,255,220,0.92); border-color:rgba(180,255,220,0.55); box-shadow:0 0 12px rgba(180,255,220,0.18); }
+  }
   #btn-portfolio {
     position:fixed;
     bottom:max(28px, env(safe-area-inset-bottom, 28px));
     left:max(28px, env(safe-area-inset-left, 28px));
     font-family:'Courier New',monospace;
     font-size:9px; letter-spacing:0.35em; text-transform:uppercase;
-    color:rgba(93,202,165,0.45);
+    color:rgba(180,255,220,0.92);
     background:transparent;
-    border:0.5px solid rgba(93,202,165,0.2);
+    border:0.5px solid rgba(180,255,220,0.55);
+    box-shadow:0 0 12px rgba(180,255,220,0.18);
     padding:9px 16px;
     cursor:pointer; z-index:20;
     min-height:44px;
     display:flex; align-items:center; justify-content:center;
-    transition:color 0.5s ease, border-color 0.5s ease, background 0.5s ease;
+    animation: oscilloID-pulse 2.8s ease-in-out infinite;
     -webkit-tap-highlight-color:transparent;
     white-space:nowrap;
   }
   #btn-portfolio:hover {
-    color:rgba(93,202,165,0.85);
-    border-color:rgba(93,202,165,0.55);
-    background:rgba(93,202,165,0.04);
+    animation:none;
+    color:rgba(220,255,240,1);
+    border-color:rgba(220,255,240,0.75);
+    background:rgba(180,255,220,0.06);
+    box-shadow:0 0 20px rgba(180,255,220,0.28);
   }
-  #btn-portfolio:active { background:rgba(93,202,165,0.08); }
+  #btn-portfolio:active { background:rgba(180,255,220,0.1); }
+
+  /* ── BOTÃO AJUDA — canto superior esquerdo ─────────────────────────────── */
+  #btn-help {
+    position:fixed;
+    top:max(20px, env(safe-area-inset-top, 20px));
+    left:max(20px, env(safe-area-inset-left, 20px));
+    width:36px; height:36px; border-radius:50%;
+    background:transparent;
+    border:0.5px solid rgba(93,202,165,0.30);
+    cursor:pointer; z-index:20;
+    display:flex; align-items:center; justify-content:center;
+    transition:border-color 0.4s ease, background 0.4s ease;
+    -webkit-tap-highlight-color:transparent;
+    flex-direction:column; gap:4px;
+  }
+  #btn-help:hover { border-color:rgba(93,202,165,0.65); background:rgba(93,202,165,0.05); }
+  #btn-help .bar {
+    width:14px; height:0.5px;
+    background:rgba(93,202,165,0.65);
+    transition:background 0.4s ease;
+  }
+  #btn-help:hover .bar { background:rgba(93,202,165,0.95); }
+
+  /* ── MODAL DE AJUDA ────────────────────────────────────────────────────── */
+  #help-modal {
+    position:fixed;
+    top:max(68px, env(safe-area-inset-top, 20px) + 56px);
+    left:max(20px, env(safe-area-inset-left, 20px));
+    z-index:30;
+    width:min(280px, calc(100vw - 40px));
+    background:rgba(3,22,18,0.82);
+    backdrop-filter:blur(18px) saturate(1.4);
+    -webkit-backdrop-filter:blur(18px) saturate(1.4);
+    border:0.5px solid rgba(93,202,165,0.18);
+    border-radius:4px;
+    padding:24px 22px 20px;
+    pointer-events:none;
+    opacity:0;
+    transform:translateY(-8px);
+    transition:opacity 0.4s ease, transform 0.4s ease;
+  }
+  #help-modal.open {
+    opacity:1;
+    transform:translateY(0);
+    pointer-events:auto;
+  }
+  #help-modal h3 {
+    font-family:'Courier New',monospace;
+    font-size:8px; letter-spacing:0.35em; text-transform:uppercase;
+    color:rgba(93,202,165,0.55);
+    margin-bottom:18px;
+  }
+  .help-row {
+    display:grid; grid-template-columns:1fr 1fr;
+    gap:6px 10px; margin-bottom:6px;
+  }
+  .help-key {
+    font-family:'Courier New',monospace;
+    font-size:8px; letter-spacing:0.08em;
+    color:rgba(93,202,165,0.40);
+    padding-top:1px;
+  }
+  .help-val {
+    font-family:'Courier New',monospace;
+    font-size:8px; letter-spacing:0.06em; line-height:1.6;
+    color:rgba(180,230,215,0.72);
+  }
+  .help-divider {
+    height:0.5px;
+    background:rgba(93,202,165,0.10);
+    margin:14px 0;
+  }
 
   /* ── OVERLAY DE SAÍDA DO CAMPO ─────────────────────────────────────────────── */
   #campo-overlay {
@@ -219,6 +299,41 @@
 <body>
 <canvas id="c"></canvas>
 <div id="campo-overlay"></div>
+
+<!-- BOTÃO AJUDA — canto superior esquerdo -->
+<button id="btn-help" aria-label="como interagir">
+  <span class="bar"></span>
+  <span class="bar"></span>
+  <span class="bar"></span>
+</button>
+
+<!-- MODAL DE AJUDA -->
+<div id="help-modal" role="dialog" aria-label="instruções de interação">
+  <h3>como interagir</h3>
+  <div class="help-row">
+    <span class="help-key">cursor / toque</span>
+    <span class="help-val">influencia o campo visual</span>
+  </div>
+  <div class="help-row">
+    <span class="help-key">clique / toque</span>
+    <span class="help-val">gera pulsos no campo</span>
+  </div>
+  <div class="help-divider"></div>
+  <div class="help-row">
+    <span class="help-key">controles laterais</span>
+    <span class="help-val">volume e intensidade</span>
+  </div>
+  <div class="help-row">
+    <span class="help-key">&#9655; inferior</span>
+    <span class="help-val">inicia o som</span>
+  </div>
+  <div class="help-divider"></div>
+  <div class="help-row">
+    <span class="help-key">oscilloID</span>
+    <span class="help-val">acessa o portfolio</span>
+  </div>
+</div>
+
 <div id="phase">fase 1</div>
 <div id="hint">toque · posição define a nota · segure para ampliar</div>
 <div id="noteui"></div>
@@ -357,8 +472,10 @@ let analyser=null, analyserData=null;
 let comp_ref=null, clickReverb=null, clickRevGain=null;
 let sFilter=600, analyserSmooth=0;
 
-const FADE_IN  = 1.0;  // segundos
-const FADE_OUT = 0.4;
+const FADE_IN      = 3.5;  // segundos — primeiro play: entrada suave
+const FADE_IN_RESUME = 1.0; // resume depois de pause
+const FADE_OUT     = 0.4;  // pause normal
+const FADE_OUT_EXIT = 4.5; // saída para o portfolio
 
 function makeShaperCurve(amount) {
   const n=256, curve=new Float32Array(n);
@@ -427,25 +544,27 @@ function getTargetVol() {
   return (document.getElementById('vol').value/100)*0.7;
 }
 
-function fadeIn() {
+function fadeIn(duration) {
   if(!audioCtx) return;
+  const dur = duration !== undefined ? duration : FADE_IN_RESUME;
   audioCtx.resume().catch(()=>{});
   const now = audioCtx.currentTime;
   masterGain.gain.cancelScheduledValues(now);
   masterGain.gain.setValueAtTime(masterGain.gain.value, now);
-  masterGain.gain.linearRampToValueAtTime(getTargetVol(), now + FADE_IN);
+  masterGain.gain.linearRampToValueAtTime(getTargetVol(), now + dur);
 }
 
-function fadeOut(callback) {
+function fadeOut(duration, callback) {
   if(!audioCtx) return;
+  const dur = duration !== undefined ? duration : FADE_OUT;
   const now = audioCtx.currentTime;
   masterGain.gain.cancelScheduledValues(now);
   masterGain.gain.setValueAtTime(masterGain.gain.value, now);
-  masterGain.gain.linearRampToValueAtTime(0, now + FADE_OUT);
+  masterGain.gain.linearRampToValueAtTime(0, now + dur);
   setTimeout(() => {
     audioCtx.suspend().catch(()=>{});
     if(callback) callback();
-  }, FADE_OUT * 1000 + 50);
+  }, dur * 1000 + 50);
 }
 
 // iOS background
@@ -469,24 +588,24 @@ function setPlayingUI(isPlaying) {
 
 btnPlay.addEventListener('click', () => {
   if(!started) {
-    // primeira vez — inicializa e faz fade in
+    // primeira vez — inicializa e faz fade in lento (3.5s)
     initAudio();
     started = true; playing = true;
     setPlayingUI(true);
-    fadeIn();
+    fadeIn(FADE_IN);
     // hint
     setTimeout(()=>{ hintEl.style.opacity='0.25'; }, 400);
     setTimeout(()=>{ hintEl.style.opacity='0'; },    5000);
   } else if(playing) {
-    // pause com fade out
+    // pause com fade out rápido
     playing = false;
     setPlayingUI(false);
-    fadeOut();
+    fadeOut(FADE_OUT);
   } else {
-    // resume com fade in
+    // resume com fade in rápido
     playing = true;
     setPlayingUI(true);
-    fadeIn();
+    fadeIn(FADE_IN_RESUME);
   }
 });
 
@@ -914,20 +1033,37 @@ function draw(){
 
 draw();
 
+// ── BOTÃO AJUDA ────────────────────────────────────────────────────────────────
+const btnHelp   = document.getElementById('btn-help');
+const helpModal = document.getElementById('help-modal');
+let helpOpen    = false;
+
+btnHelp.addEventListener('click', () => {
+  helpOpen = !helpOpen;
+  helpModal.classList.toggle('open', helpOpen);
+});
+
+// fecha modal ao clicar fora
+document.addEventListener('click', (e) => {
+  if(helpOpen && !helpModal.contains(e.target) && e.target !== btnHelp) {
+    helpOpen = false;
+    helpModal.classList.remove('open');
+  }
+});
+
 // ── BOTÃO oscilloID → PORTFOLIO ───────────────────────────────────────────────
 const btnPortfolio = document.getElementById('btn-portfolio');
 const campoOverlay = document.getElementById('campo-overlay');
 
 btnPortfolio.addEventListener('click', () => {
-  // fade out do áudio
-  if(started && playing) fadeOut();
+  // fade out do áudio longo (4.5s) — som decai enquanto campo escurece
+  if(started && playing) fadeOut(FADE_OUT_EXIT);
 
-  // inicia fade visual (7s via CSS transition)
+  // inicia fade visual (3.5s via CSS transition)
   campoOverlay.classList.add('active');
 
-  // após 3.5s (overlay quase opaco), navega para o portfolio
+  // após 3.5s (overlay opaco), navega para o portfolio
   setTimeout(() => {
-    // passa flag para o portfolio saber que veio do campo
     sessionStorage.setItem('fromCampo', '1');
     window.location.href = 'portfolio.html';
   }, 3700);
