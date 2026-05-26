@@ -965,15 +965,7 @@
       }
     });
 
-    /* ─── BOTÃO CAMPO → RETORNO ─── */
-    document.getElementById('btn-campo').addEventListener('click', () => {
-      const exitOverlay = document.getElementById('portfolio-exit-overlay');
-      exitOverlay.classList.add('active');
-      setTimeout(() => {
-        sessionStorage.setItem('returningToCampo', '1');
-        window.location.href = 'index.html';
-      }, 3700);
-    });
+    /* ─── BOTÃO CAMPO → RETORNO — tratado pelo bloco de áudio abaixo ─── */
 
     /* ─── SE VEIO DO CAMPO: pula splash, fade-in direto no portfolio ─── */
     if (sessionStorage.getItem('fromCampo')) {
@@ -1030,6 +1022,185 @@
         ? 'Lucas Miranda — oscilloID · Compositor & Artista Sonoro'
         : 'Lucas Miranda — oscilloID · Composer & Sound Artist';
     }
+
+    /* ─── WEB AUDIO — SONS DE NAVEGAÇÃO ─── */
+    let pAudio = null;   // AudioContext lazy-init
+    let pReady = false;
+
+    // Escala pentatônica Am — mesmas notas do campo
+    const P_SCALE = [220.0, 261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3, 659.3, 784.0];
+
+    function initPortfolioAudio() {
+      if (pReady) return;
+      pAudio = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Reverb curto — espaço ambiente
+      const revLen = pAudio.sampleRate * 1.8;
+      const revBuf = pAudio.createBuffer(2, revLen, pAudio.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = revBuf.getChannelData(ch);
+        for (let i = 0; i < revLen; i++)
+          d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / revLen, 2.8);
+      }
+      pAudio._rev = pAudio.createConvolver();
+      pAudio._rev.buffer = revBuf;
+      const revGain = pAudio.createGain();
+      revGain.gain.value = 0.22;
+      pAudio._rev.connect(revGain);
+      revGain.connect(pAudio.destination);
+
+      // Compressor suave
+      const comp = pAudio.createDynamicsCompressor();
+      comp.threshold.value = -24; comp.knee.value = 14;
+      comp.ratio.value = 5; comp.attack.value = 0.004; comp.release.value = 0.3;
+      comp.connect(pAudio.destination);
+      comp.connect(pAudio._rev);
+      pAudio._out = comp;
+
+      pReady = true;
+    }
+
+    // ── tom suave — sine com envelope breve
+    function pTone(freq, vol, attack, sustain, release, detune) {
+      if (!pReady) return;
+      const now = pAudio.currentTime;
+      const osc = pAudio.createOscillator();
+      const env = pAudio.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      if (detune) osc.detune.value = detune;
+      osc.connect(env); env.connect(pAudio._out);
+      env.gain.setValueAtTime(0, now);
+      env.gain.linearRampToValueAtTime(vol, now + attack);
+      env.gain.setValueAtTime(vol, now + attack + sustain);
+      env.gain.linearRampToValueAtTime(0, now + attack + sustain + release);
+      osc.start(now);
+      osc.stop(now + attack + sustain + release + 0.05);
+    }
+
+    // ── HOVER nos cards — sine ultrabreve, altíssimo, quase inaudível
+    let lastHoverTime = 0;
+    function soundHover() {
+      const now = Date.now();
+      if (now - lastHoverTime < 120) return;   // throttle
+      lastHoverTime = now;
+      if (!pReady) return;
+      const freq = P_SCALE[Math.floor(Math.random() * 4) + 5]; // notas altas
+      pTone(freq * 2, 0.028, 0.006, 0.012, 0.06, (Math.random() - 0.5) * 6);
+    }
+
+    // ── CLICK em nav / botões — intervalo de 2ª menor da pentatônica, suave
+    let clickIdx = 0;
+    function soundClick() {
+      if (!pReady) return;
+      const i  = clickIdx % P_SCALE.length;
+      const f1 = P_SCALE[i];
+      const f2 = P_SCALE[(i + 2) % P_SCALE.length];
+      clickIdx++;
+      pTone(f1, 0.055, 0.004, 0.02, 0.22, 0);
+      setTimeout(() => pTone(f2, 0.038, 0.004, 0.015, 0.28, 3), 60);
+    }
+
+    // ── SCROLL REVEAL dos cards — acorde etéreo de 2 notas, attack lento
+    let revealIdx = 0;
+    function soundReveal() {
+      if (!pReady) return;
+      const i  = revealIdx % P_SCALE.length;
+      revealIdx++;
+      const f1 = P_SCALE[i];
+      const f2 = P_SCALE[(i + 4) % P_SCALE.length]; // 5ª
+      pTone(f1, 0.042, 0.18, 0.12, 0.55, -2);
+      pTone(f2, 0.028, 0.22, 0.08, 0.60,  2);
+    }
+
+    // ── RETORNO AO CAMPO — sine grave que sobe enquanto escurece
+    function soundExitToCampo() {
+      if (!pReady) return;
+      const now = pAudio.currentTime;
+      const osc = pAudio.createOscillator();
+      const env = pAudio.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(110, now);                    // A2
+      osc.frequency.linearRampToValueAtTime(220, now + 3.2);     // sobe uma oitava
+      osc.connect(env); env.connect(pAudio._out);
+      env.gain.setValueAtTime(0, now);
+      env.gain.linearRampToValueAtTime(0.07, now + 0.4);
+      env.gain.linearRampToValueAtTime(0.05, now + 2.8);
+      env.gain.linearRampToValueAtTime(0,    now + 3.5);
+      osc.start(now); osc.stop(now + 3.6);
+    }
+
+    // ── INICIALIZA O AUDIO NO PRIMEIRO GESTO DO USUÁRIO
+    function ensureAudio() { if (!pReady) initPortfolioAudio(); }
+
+    // ── ATTACH HOVER nos cards
+    function attachCardSounds() {
+      document.querySelectorAll(
+        '.project-card, .featured-project, .service-item, .stat-item, .nav-links a, .contact-link'
+      ).forEach(el => {
+        el.addEventListener('mouseenter', () => { ensureAudio(); soundHover(); });
+        el.addEventListener('click',      () => { ensureAudio(); soundClick(); });
+      });
+
+      // nav links — só hover/click, sem reveal
+      document.querySelectorAll('.nav-links a').forEach(el => {
+        el.addEventListener('mouseenter', () => { ensureAudio(); soundHover(); });
+      });
+
+      // lang toggle
+      const langBtn = document.querySelector('.lang-toggle');
+      if (langBtn) langBtn.addEventListener('click', () => { ensureAudio(); soundClick(); });
+    }
+
+    // ── OVERRRIDE do cardObs para adicionar som no reveal
+    // (re-observe após setup, usando MutationObserver seria mais limpo,
+    //  mas aqui sobrescrevemos o callback wrapping)
+    const _origCardObs = new IntersectionObserver((entries) => {
+      entries.forEach((e, i) => {
+        if (e.isIntersecting) {
+          setTimeout(() => {
+            e.target.style.opacity    = '1';
+            e.target.style.transform  = 'translateY(0)';
+          }, i * 60);
+          setTimeout(() => { ensureAudio(); soundReveal(); }, i * 80 + 30);
+          _origCardObs.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    // ── PATCH NO BOTÃO CAMPO — adiciona som de saída
+    const _btnCampo = document.getElementById('btn-campo');
+    if (_btnCampo) {
+      // clone para remover listener anterior e adicionar novo com som
+      const _newBtn = _btnCampo.cloneNode(true);
+      _btnCampo.parentNode.replaceChild(_newBtn, _btnCampo);
+      _newBtn.addEventListener('click', () => {
+        ensureAudio();
+        soundExitToCampo();
+        const exitOverlay = document.getElementById('portfolio-exit-overlay');
+        exitOverlay.classList.add('active');
+        setTimeout(() => {
+          sessionStorage.setItem('returningToCampo', '1');
+          window.location.href = 'index.html';
+        }, 3700);
+      });
+    }
+
+    // ── PATCH NO SPLASH — inicializa audio no clique de entrada
+    const _splash = document.getElementById('splash');
+    if (_splash) {
+      _splash.addEventListener('click', () => { ensureAudio(); soundClick(); });
+    }
+
+    // ── INICIA APÓS O DOM ESTAR PRONTO
+    attachCardSounds();
+
+    // Re-attach nos cards que são revelados via scroll (já estão no DOM)
+    // e re-observa com o novo observer que inclui som
+    document.querySelectorAll('.project-card, .featured-project, .service-item, .stat-item').forEach(c => {
+      _origCardObs.observe(c);
+    });
+
   </script>
 
 </body>
