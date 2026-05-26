@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>campo</title>
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#031a16; }
+
+  canvas {
+    display:block; position:fixed; top:0; left:0;
+    width:100vw; height:100vh; cursor:default;
+  }
+  @media (pointer:fine) { canvas { cursor:crosshair; } }
+
+  /* ── BOTÃO PLAY/PAUSE — sempre visível ─────────────────────────────────── */
+  #btn-play {
+    position:fixed; bottom:max(28px, env(safe-area-inset-bottom, 28px)); left:50%;
+    transform:translateX(-50%);
+    width:52px; height:52px; border-radius:50%;
+    background:transparent;
+    border:0.5px solid rgba(93,202,165,0.35);
+    cursor:pointer; z-index:20;
+    display:flex; align-items:center; justify-content:center;
+    transition:border-color 0.4s ease, background 0.4s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #btn-play:hover  { border-color:rgba(93,202,165,0.75); background:rgba(93,202,165,0.05); }
+  #btn-play:active { background:rgba(93,202,165,0.1); }
+  #btn-play svg { width:20px; height:20px; }
+
+  /* ── BOTÃO ABRIR PAINEL — canto superior direito ───────────────────────── */
+  #btn-panel {
+    position:fixed;
+    top:max(20px, env(safe-area-inset-top, 20px));
+    right:max(20px, env(safe-area-inset-right, 20px));
+    width:36px; height:36px; border-radius:50%;
+    background:transparent;
+    border:0.5px solid rgba(93,202,165,0.35);
+    cursor:pointer; z-index:20;
+    display:flex; align-items:center; justify-content:center;
+    transition:border-color 0.4s ease, background 0.4s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #btn-panel:hover  { border-color:rgba(93,202,165,0.75); background:rgba(93,202,165,0.05); }
+  #btn-panel svg { width:14px; height:14px; }
+
+  /* ── PAINEL DE CONTROLES ───────────────────────────────────────────────── */
+  #panel {
+    position:fixed; z-index:19;
+    display:flex; flex-direction:column; gap:20px;
+    transition:opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  /* desktop: painel fixo lado direito, sempre visível */
+  @media (pointer:fine) and (min-width:600px) {
+    #panel {
+      top:50%; right:max(28px, env(safe-area-inset-right, 28px));
+      transform:translateY(-50%);
+      opacity:1 !important; pointer-events:auto !important;
+    }
+    #btn-panel { display:none; }
+  }
+
+  /* mobile: painel bottom-sheet recolhível */
+  @media not all and (pointer:fine) and (min-width:600px) {
+    #panel {
+      bottom:0; left:0; right:0;
+      flex-direction:row; justify-content:center; align-items:flex-end;
+      padding:20px 24px calc(max(90px, env(safe-area-inset-bottom,0px) + 90px));
+      background:linear-gradient(to top, rgba(3,26,22,0.96) 60%, transparent);
+      transform:translateY(100%);
+    }
+    #panel.open {
+      transform:translateY(0);
+      opacity:1; pointer-events:auto;
+    }
+    #panel:not(.open) {
+      opacity:0; pointer-events:none;
+    }
+  }
+
+  /* ── CONTROLE INDIVIDUAL ───────────────────────────────────────────────── */
+  .ctrl {
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    position:relative;
+  }
+  .ctrl-icon { display:flex; align-items:center; justify-content:center; }
+  .ctrl-icon svg { width:16px; height:16px; }
+
+  /* tooltip */
+  .ctrl::after {
+    content:attr(data-tip);
+    position:absolute; bottom:calc(100% + 8px); left:50%;
+    transform:translateX(-50%);
+    font-family:'Courier New',monospace; font-size:8px; letter-spacing:0.12em;
+    color:rgba(93,202,165,0.7);
+    background:rgba(3,26,22,0.9); border:0.5px solid rgba(93,202,165,0.2);
+    padding:3px 8px; border-radius:2px; white-space:nowrap;
+    opacity:0; pointer-events:none;
+    transition:opacity 0.3s ease;
+  }
+  .ctrl:hover::after { opacity:1; }
+
+  .ctrl input[type=range] {
+    -webkit-appearance:none; appearance:none;
+    background:transparent; outline:none; cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  /* vertical em desktop */
+  @media (pointer:fine) and (min-width:600px) {
+    .ctrl input[type=range] {
+      writing-mode:vertical-lr;
+      direction:rtl;
+      width:20px; height:80px;
+    }
+    .ctrl input[type=range]::-webkit-slider-runnable-track {
+      width:1px; background:rgba(93,202,165,0.2); border-radius:1px;
+    }
+    .ctrl input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance:none;
+      width:16px; height:16px; border-radius:50%;
+      background:transparent; border:0.5px solid rgba(93,202,165,0.6);
+      margin-left:-7.5px; cursor:pointer;
+    }
+    .ctrl::after { bottom:auto; top:calc(100% + 8px); }
+  }
+
+  /* horizontal em mobile */
+  @media not all and (pointer:fine) and (min-width:600px) {
+    .ctrl { flex-direction:row; gap:10px; align-items:center; }
+    .ctrl input[type=range] { width:100px; height:20px; }
+    .ctrl input[type=range]::-webkit-slider-runnable-track {
+      height:1px; background:rgba(93,202,165,0.2); border-radius:1px;
+    }
+    .ctrl input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance:none;
+      width:20px; height:20px; border-radius:50%;
+      background:transparent; border:0.5px solid rgba(93,202,165,0.6);
+      margin-top:-9.5px; cursor:pointer;
+    }
+    .ctrl::after { bottom:calc(100% + 6px); }
+  }
+
+  .ctrl input[type=range]::-moz-range-thumb {
+    width:14px; height:14px; border-radius:50%;
+    background:transparent; border:0.5px solid rgba(93,202,165,0.6);
+  }
+
+  /* ── INDICADOR DE FASE ─────────────────────────────────────────────────── */
+  #phase {
+    position:fixed;
+    top:max(24px, env(safe-area-inset-top, 24px)); left:max(20px, env(safe-area-inset-left, 20px));
+    font-family:'Courier New',monospace; font-size:9px; letter-spacing:0.14em;
+    color:rgba(93,202,165,0.18); pointer-events:none; transition:opacity 0.5s ease;
+  }
+
+  /* ── HINT ──────────────────────────────────────────────────────────────── */
+  #hint {
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-family:'Courier New',monospace; font-size:9px; letter-spacing:0.18em;
+    color:rgba(93,202,165,0.0); pointer-events:none;
+    transition:opacity 1.4s ease; white-space:nowrap; text-align:center;
+  }
+
+  /* ── NOTE UI ───────────────────────────────────────────────────────────── */
+  #noteui {
+    position:fixed; bottom:max(90px, env(safe-area-inset-bottom,0px) + 90px);
+    left:50%; transform:translateX(-50%);
+    display:flex; gap:5px; align-items:center; justify-content:center; flex-wrap:wrap;
+    pointer-events:none;
+  }
+  .note {
+    font-family:'Courier New',monospace; font-size:8px; letter-spacing:0.1em;
+    padding:2px 6px; border-radius:2px;
+    border:0.5px solid rgba(93,202,165,0.1);
+    color:rgba(93,202,165,0.12); transition:all 0.7s ease;
+  }
+  @media (max-height:500px) { #noteui { display:none; } #phase { display:none; } }
+
+  /* ── BOTÃO oscilloID — canto inferior esquerdo ────────────────────────────── */
+  #btn-portfolio {
+    position:fixed;
+    bottom:max(28px, env(safe-area-inset-bottom, 28px));
+    left:max(28px, env(safe-area-inset-left, 28px));
+    font-family:'Courier New',monospace;
+    font-size:9px; letter-spacing:0.35em; text-transform:uppercase;
+    color:rgba(93,202,165,0.45);
+    background:transparent;
+    border:0.5px solid rgba(93,202,165,0.2);
+    padding:9px 16px;
+    cursor:pointer; z-index:20;
+    min-height:44px;
+    display:flex; align-items:center; justify-content:center;
+    transition:color 0.5s ease, border-color 0.5s ease, background 0.5s ease;
+    -webkit-tap-highlight-color:transparent;
+    white-space:nowrap;
+  }
+  #btn-portfolio:hover {
+    color:rgba(93,202,165,0.85);
+    border-color:rgba(93,202,165,0.55);
+    background:rgba(93,202,165,0.04);
+  }
+  #btn-portfolio:active { background:rgba(93,202,165,0.08); }
+
+  /* ── OVERLAY DE SAÍDA DO CAMPO ─────────────────────────────────────────────── */
+  #campo-overlay {
+    position:fixed; inset:0;
+    background:#031a16;
+    z-index:50;
+    opacity:0; pointer-events:none;
+    transition:opacity 7s ease;
+  }
+  #campo-overlay.active { opacity:1; pointer-events:all; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="campo-overlay"></div>
+<div id="phase">fase 1</div>
+<div id="hint">toque · posição define a nota · segure para ampliar</div>
+<div id="noteui"></div>
+
+<!-- BOTÃO oscilloID → portfolio -->
+<button id="btn-portfolio" aria-label="oscilloID — portfolio">oscilloID</button>
+
+<!-- PLAY/PAUSE — sempre visível -->
+<button id="btn-play" aria-label="play/pause">
+  <!-- ícone play por padrão -->
+  <svg id="icon-play" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="5,3 17,10 5,17" fill="rgba(93,202,165,0.75)"/>
+  </svg>
+  <svg id="icon-pause" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <rect x="4" y="3" width="4" height="14" fill="rgba(93,202,165,0.75)" rx="1"/>
+    <rect x="12" y="3" width="4" height="14" fill="rgba(93,202,165,0.75)" rx="1"/>
+  </svg>
+</button>
+
+<!-- BOTÃO ABRIR PAINEL (mobile) -->
+<button id="btn-panel" aria-label="controles">
+  <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="7" cy="3"  r="1.2" fill="rgba(93,202,165,0.7)"/>
+    <circle cx="7" cy="7"  r="1.2" fill="rgba(93,202,165,0.7)"/>
+    <circle cx="7" cy="11" r="1.2" fill="rgba(93,202,165,0.7)"/>
+  </svg>
+</button>
+
+<!-- PAINEL DE CONTROLES -->
+<div id="panel">
+  <!-- volume: ícone de onda única -->
+  <div class="ctrl" data-tip="volume">
+    <div class="ctrl-icon">
+      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 5.5 L2 10.5 L5 10.5 L9 13.5 L9 2.5 L5 5.5 Z"
+              fill="rgba(93,202,165,0.6)" stroke="none"/>
+        <path d="M11 5.5 Q13 8 11 10.5" stroke="rgba(93,202,165,0.6)" stroke-width="1.2"
+              fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <input id="vol" type="range" min="0" max="100" value="50" aria-label="volume">
+  </div>
+
+  <!-- intensidade: ícone de três ondas -->
+  <div class="ctrl" data-tip="intensidade">
+    <div class="ctrl-icon">
+      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1 8 Q3 4 5 8 Q7 12 9 8 Q11 4 13 8 Q14 10 15 8"
+              stroke="rgba(93,202,165,0.6)" stroke-width="1.2"
+              fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <input id="intensity" type="range" min="0" max="100" value="35" aria-label="intensidade">
+  </div>
+</div>
+
+<script>
+// ── CANVAS ────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const LINE_SPACING = 6;
+let N = 1;
+
+// declarado antes de resize()
+const pulses = [];
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  N = Math.max(10, Math.round(canvas.width / LINE_SPACING));
+  pulses.length = 0;
+}
+resize();
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => { setTimeout(resize, 200); });
+
+// ── CORES ─────────────────────────────────────────────────────────────────────
+const rA=93,  gA=202, bA=165;
+const rB=196, gB=94,  bB=62;
+const rC=220, gC=190, bC=120;
+
+// ── SEQUÊNCIA ─────────────────────────────────────────────────────────────────
+const FPS=60, D1=8*FPS, D2=4*FPS, D3=4*FPS, D4=4*FPS, DM=3*FPS;
+const SEQ = [
+  {type:'hold',  phase:1,      dur:D1},
+  {type:'morph', from:1, to:2, dur:DM},
+  {type:'hold',  phase:2,      dur:D2},
+  {type:'morph', from:2, to:3, dur:DM},
+  {type:'hold',  phase:3,      dur:D3},
+  {type:'morph', from:3, to:4, dur:DM},
+  {type:'hold',  phase:4,      dur:D4},
+  {type:'morph', from:4, to:3, dur:DM},
+  {type:'hold',  phase:3,      dur:D3},
+  {type:'morph', from:3, to:2, dur:DM},
+  {type:'hold',  phase:2,      dur:D2},
+  {type:'morph', from:2, to:1, dur:DM},
+];
+const TOTAL = SEQ.reduce((s,e) => s+e.dur, 0);
+const PHASE_LABELS = {
+  1:'fase 1', 2:'fase 2', 3:'fase 3', 4:'fase 4 — clímax',
+};
+function ss(x){ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); }
+
+// ── HARMONIA ──────────────────────────────────────────────────────────────────
+const NOTE_NAMES = ['A2','E3','C3','G3','D3','A3','C4'];
+const NOTE_FREQS = {A2:110,C3:130.8,D3:146.8,E3:164.8,G3:196,A3:220,C4:261.6};
+const SEG_NOTES  = [1,2,3,4,5,6,7,6,5,4,3,2];
+const NOTE_ZONES = ['center','right','left','total','center','total','center'];
+const BASE_VOLS  = [0.40,0.30,0.28,0.22,0.20,0.16,0.13];
+
+// 14 notas — 2 oitavas Am pentatônica: A3→C5 (esquerda→centro) e A4→C6 (centro→direita)
+const CLICK_NOTES = [
+  {freq:220.0},  // A3
+  {freq:261.6},  // C4
+  {freq:293.7},  // D4
+  {freq:329.6},  // E4
+  {freq:392.0},  // G4
+  {freq:440.0},  // A4
+  {freq:523.3},  // C5  ← dobradiça centro
+  {freq:587.3},  // D5
+  {freq:659.3},  // E5
+  {freq:784.0},  // G5
+  {freq:880.0},  // A5
+  {freq:1046.5}, // C6
+  {freq:1174.7}, // D6
+  {freq:1318.5}, // E6
+];
+
+// ── ÁUDIO ─────────────────────────────────────────────────────────────────────
+let audioCtx=null, masterGain=null, started=false, playing=false;
+let lfo=null, lfoGain=null, filter=null;
+let oscs=[], gains=[], smoothed=[];
+let delayNode=null, delayFeedGain=null;
+let shaper=null, shaperGain=null;
+let analyser=null, analyserData=null;
+let comp_ref=null, clickReverb=null, clickRevGain=null;
+let sFilter=600, analyserSmooth=0;
+
+const FADE_IN  = 1.0;  // segundos
+const FADE_OUT = 0.4;
+
+function makeShaperCurve(amount) {
+  const n=256, curve=new Float32Array(n);
+  const d=Math.tanh(1+amount*3)||1;
+  for(let i=0;i<n;i++){ const x=(i*2/n)-1; curve[i]=Math.tanh(x*(1+amount*3))/d; }
+  return curve;
+}
+
+function initAudio() {
+  audioCtx   = new (window.AudioContext||window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0;
+  masterGain.connect(audioCtx.destination);
+
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  analyserData = new Uint8Array(analyser.frequencyBinCount);
+  masterGain.connect(analyser);
+
+  comp_ref = audioCtx.createDynamicsCompressor();
+  comp_ref.threshold.value=-18; comp_ref.knee.value=12; comp_ref.ratio.value=6;
+  comp_ref.attack.value=0.003; comp_ref.release.value=0.25;
+  comp_ref.connect(masterGain);
+
+  const revLen=audioCtx.sampleRate*3.5;
+  const revBuf=audioCtx.createBuffer(2,revLen,audioCtx.sampleRate);
+  for(let ch=0;ch<2;ch++){
+    const d=revBuf.getChannelData(ch);
+    for(let i=0;i<revLen;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/revLen,2.2);
+  }
+  clickReverb=audioCtx.createConvolver(); clickReverb.buffer=revBuf;
+  clickRevGain=audioCtx.createGain(); clickRevGain.gain.value=0.38;
+  clickReverb.connect(clickRevGain); clickRevGain.connect(comp_ref);
+
+  filter=audioCtx.createBiquadFilter();
+  filter.type='lowpass'; filter.frequency.value=600; filter.Q.value=1.2;
+  filter.connect(comp_ref); filter.connect(clickReverb);
+
+  shaper=audioCtx.createWaveShaper();
+  shaper.curve=makeShaperCurve(0); shaper.oversample='4x';
+  shaperGain=audioCtx.createGain(); shaperGain.gain.value=0;
+  shaper.connect(shaperGain); shaperGain.connect(filter);
+
+  delayNode=audioCtx.createDelay(2.0); delayNode.delayTime.value=0.42;
+  delayFeedGain=audioCtx.createGain(); delayFeedGain.gain.value=0;
+  filter.connect(delayNode);
+  delayNode.connect(delayFeedGain); delayFeedGain.connect(filter);
+  delayNode.connect(comp_ref);
+
+  lfo=audioCtx.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.06;
+  lfoGain=audioCtx.createGain(); lfoGain.gain.value=5;
+  lfo.connect(lfoGain); lfo.start();
+
+  NOTE_NAMES.forEach((name,i)=>{
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type=i<2?'sine':(i<5?'triangle':'sine');
+    o.frequency.value=NOTE_FREQS[name]; o.detune.value=Math.random()*4-2;
+    lfoGain.connect(o.detune); o.connect(g);
+    if(i>=4) g.connect(shaper); else g.connect(filter);
+    g.gain.value=0; o.start();
+    oscs.push(o); gains.push(g); smoothed.push(0);
+  });
+}
+
+function getTargetVol() {
+  return (document.getElementById('vol').value/100)*0.7;
+}
+
+function fadeIn() {
+  if(!audioCtx) return;
+  audioCtx.resume().catch(()=>{});
+  const now = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(now);
+  masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+  masterGain.gain.linearRampToValueAtTime(getTargetVol(), now + FADE_IN);
+}
+
+function fadeOut(callback) {
+  if(!audioCtx) return;
+  const now = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(now);
+  masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+  masterGain.gain.linearRampToValueAtTime(0, now + FADE_OUT);
+  setTimeout(() => {
+    audioCtx.suspend().catch(()=>{});
+    if(callback) callback();
+  }, FADE_OUT * 1000 + 50);
+}
+
+// iOS background
+document.addEventListener('visibilitychange', () => {
+  if(!audioCtx) return;
+  if(document.hidden) { audioCtx.suspend(); }
+  else if(playing) { audioCtx.resume().catch(()=>{}); }
+});
+
+// ── BOTÃO PLAY/PAUSE ─────────────────────────────────────────────────────────
+const btnPlay   = document.getElementById('btn-play');
+const iconPlay  = document.getElementById('icon-play');
+const iconPause = document.getElementById('icon-pause');
+
+function setPlayingUI(isPlaying) {
+  iconPlay.style.display  = isPlaying ? 'none'  : 'block';
+  iconPause.style.display = isPlaying ? 'block' : 'none';
+  btnPlay.style.borderColor = isPlaying
+    ? 'rgba(93,202,165,0.7)' : 'rgba(93,202,165,0.35)';
+}
+
+btnPlay.addEventListener('click', () => {
+  if(!started) {
+    // primeira vez — inicializa e faz fade in
+    initAudio();
+    started = true; playing = true;
+    setPlayingUI(true);
+    fadeIn();
+    // hint
+    setTimeout(()=>{ hintEl.style.opacity='0.25'; }, 400);
+    setTimeout(()=>{ hintEl.style.opacity='0'; },    5000);
+  } else if(playing) {
+    // pause com fade out
+    playing = false;
+    setPlayingUI(false);
+    fadeOut();
+  } else {
+    // resume com fade in
+    playing = true;
+    setPlayingUI(true);
+    fadeIn();
+  }
+});
+
+// ── BOTÃO PAINEL MOBILE ───────────────────────────────────────────────────────
+const btnPanel = document.getElementById('btn-panel');
+const panel    = document.getElementById('panel');
+let panelOpen  = false;
+
+btnPanel.addEventListener('click', () => {
+  panelOpen = !panelOpen;
+  panel.classList.toggle('open', panelOpen);
+  // rota o ícone de três pontos para X quando aberto
+  btnPanel.style.transform = panelOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+  btnPanel.style.transition = 'transform 0.3s ease';
+});
+
+// fecha painel ao tocar fora dele (mobile)
+canvas.addEventListener('touchstart', () => {
+  if(panelOpen){ panelOpen=false; panel.classList.remove('open'); btnPanel.style.transform='rotate(0deg)'; }
+}, {passive:true});
+
+// ── VOLUME — atualiza em tempo real ──────────────────────────────────────────
+document.getElementById('vol').addEventListener('input', () => {
+  if(masterGain && playing) {
+    masterGain.gain.setTargetAtTime(getTargetVol(), audioCtx.currentTime, 0.05);
+  }
+});
+
+// ── EVENTO DE CLIQUE/TOQUE ────────────────────────────────────────────────────
+function fireEvent(x, y, pressure) {
+  if(!started||!playing||!audioCtx||!comp_ref) return;
+  const now=audioCtx.currentTime;
+  const NUM_CLICK_NOTES=14;
+  const noteIdx=Math.min(NUM_CLICK_NOTES-1, Math.floor((x/canvas.width)*NUM_CLICK_NOTES));
+  const note=CLICK_NOTES[noteIdx];
+
+  // normY: 0=topo (brilhante/seco) → 1=base (fechado/reverb)
+  const normY=y/canvas.height;
+  const vol=Math.min(0.45, 0.12+(1-normY)*0.06+pressure*0.28);
+  const attackTime=0.012-(noteIdx/(NUM_CLICK_NOTES-1))*0.006;
+  const releaseTime=2.2+pressure*1.8;
+
+  // timbre: topo=aberto(freq alta), base=fechado(freq baixa)
+  const filterFreq=note.freq*(2.0+( 1-normY)*8.0); // topo: freq*10, base: freq*2
+  const filterQ=0.3+normY*1.8; // base tem mais ressonância, mais colorido
+
+  // reverb: base=mais reverb, topo=mais seco
+  const dryWet=normY; // 0=seco, 1=molhado
+
+  const osc=audioCtx.createOscillator();
+  const env=audioCtx.createGain();
+  const cf=audioCtx.createBiquadFilter();
+  const dryGain=audioCtx.createGain();
+  const wetGain=audioCtx.createGain();
+
+  osc.type='sine';
+  osc.frequency.value=note.freq;
+  osc.detune.value=Math.random()*4-2;
+  cf.type='lowpass';
+  cf.frequency.value=filterFreq;
+  cf.Q.value=filterQ;
+
+  dryGain.gain.value=1-dryWet*0.75;
+  wetGain.gain.value=0.15+dryWet*0.65;
+
+  osc.connect(cf);
+  cf.connect(env);
+  env.connect(dryGain); dryGain.connect(comp_ref);
+  env.connect(wetGain); wetGain.connect(clickReverb);
+
+  env.gain.setValueAtTime(0.0001, now);
+  env.gain.setTargetAtTime(vol, now, attackTime/3);
+  env.gain.setTargetAtTime(vol*0.72, now+attackTime*8, 0.04);
+  env.gain.setTargetAtTime(0.0001, now+attackTime*8+0.05, releaseTime/4);
+  osc.start(now);
+  osc.stop(now+attackTime*8+0.05+releaseTime*2);
+  setTimeout(()=>{
+    try{osc.disconnect();env.disconnect();cf.disconnect();
+        dryGain.disconnect();wetGain.disconnect();}catch(e){}
+  }, (attackTime*8+0.05+releaseTime*2)*1000+300);
+
+  // hue: 0=teal(grave/esq) → 1=âmbar(agudo/dir), modulado levemente por Y
+  const hue=(noteIdx/(NUM_CLICK_NOTES-1));
+
+  pulses.push({
+    x, y, radius:0,
+    maxRadius:80+pressure*120+Math.min(canvas.width,canvas.height)*0.15,
+    alpha:0.7+pressure*0.3, noteIdx,
+    born:performance.now(), life:releaseTime*1000+400,
+    hue, normY, alive:true,
+  });
+}
+
+// ── MULTI-TOUCH ───────────────────────────────────────────────────────────────
+const activeTouches = new Map();
+canvas.addEventListener('touchstart', e=>{
+  if(!started||!playing) return;
+  e.preventDefault();
+  for(const t of e.changedTouches)
+    activeTouches.set(t.identifier,{startTime:performance.now(),x:t.clientX,y:t.clientY});
+},{passive:false});
+canvas.addEventListener('touchend', e=>{
+  if(!started||!playing) return;
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    const touch=activeTouches.get(t.identifier); if(!touch) continue;
+    fireEvent(t.clientX,t.clientY,Math.min(1,(performance.now()-touch.startTime)/1500));
+    activeTouches.delete(t.identifier);
+  }
+},{passive:false});
+canvas.addEventListener('touchcancel',e=>{
+  for(const t of e.changedTouches) activeTouches.delete(t.identifier);
+},{passive:false});
+
+// mouse
+let mouseHold=null;
+let hintFaded=false;
+canvas.addEventListener('mousedown',e=>{
+  if(!started||!playing) return;
+  mouseHold={startTime:performance.now(),x:e.clientX,y:e.clientY};
+  if(!hintFaded){hintFaded=true;hintEl.style.opacity='0';}
+});
+canvas.addEventListener('mouseup',e=>{
+  if(!mouseHold) return;
+  fireEvent(e.clientX,e.clientY,Math.min(1,(performance.now()-mouseHold.startTime)/1500));
+  mouseHold=null;
+});
+canvas.addEventListener('mouseleave',e=>{
+  if(mouseHold){
+    fireEvent(mouseHold.x,mouseHold.y,Math.min(1,(performance.now()-mouseHold.startTime)/1500));
+    mouseHold=null;
+  }
+});
+
+// ── NOTE UI ───────────────────────────────────────────────────────────────────
+const noteui=document.getElementById('noteui');
+const noteEls=[];
+NOTE_NAMES.forEach(n=>{
+  const el=document.createElement('div');
+  el.className='note'; el.textContent=n.toLowerCase();
+  noteui.appendChild(el); noteEls.push(el);
+});
+
+// ── VISUAL ────────────────────────────────────────────────────────────────────
+function getAmp(phase,norm,t){
+  if(phase===1){
+    const amp=(Math.sin(norm*Math.PI*2-t)+1)/2;
+    return{amp,r:rA,g:gA,b:bA,alpha:0.08+amp*0.92};
+  }
+  if(phase===2){
+    const freq=0.8+Math.sin(norm*Math.PI)*0.6;
+    const amp=(Math.sin(norm*Math.PI*6-t*freq*1.4)+1)/2;
+    return{amp,r:rA,g:gA,b:bA,alpha:0.04+amp};
+  }
+  if(phase===3){
+    const aA=(Math.sin(norm*Math.PI*5.5-t*(0.55+Math.sin(norm*Math.PI)*0.35))+1)/2;
+    const aB=(Math.sin((1-norm)*Math.PI*5.5-t*(0.90-Math.sin(norm*Math.PI)*0.35)*0.85+Math.PI*0.65)+1)/2;
+    const cancel=Math.abs(aA-aB),cons=(aA+aB)/2,tot=aA+aB+0.001;
+    return{amp:cancel*(0.05+cons*0.95),
+      r:rA*(aA/tot)+rB*(aB/tot),g:gA*(aA/tot)+gB*(aB/tot),b:bA*(aA/tot)+bB*(aB/tot),
+      alpha:Math.min(1,cancel*(0.05+cons*0.95)*2)};
+  }
+  if(phase===4){
+    const aA=(Math.sin(norm*Math.PI*5.5-t*(0.55+Math.sin(norm*Math.PI)*0.35))+1)/2;
+    const aB=(Math.sin((1-norm)*Math.PI*5.5-t*(0.90-Math.sin(norm*Math.PI)*0.35)*0.85+Math.PI*0.65)+1)/2;
+    const gauss=Math.exp(-Math.pow((norm-0.5)*4.5,2));
+    const aC=gauss*(Math.sin(t*0.38)+1)/2;
+    const cancel=Math.abs(aA-aB),cons=(aA+aB)/2,tot=aA+aB+aC*0.6+0.001;
+    const lum=cancel*(0.05+cons*0.95)+aC*gauss*0.25;
+    return{amp:lum,
+      r:rA*(aA/tot)+rB*(aB/tot)+rC*(aC*0.6/tot),
+      g:gA*(aA/tot)+gB*(aB/tot)+gC*(aC*0.6/tot),
+      b:bA*(aA/tot)+bB*(aB/tot)+bC*(aC*0.6/tot),
+      alpha:Math.min(1,lum*2)};
+  }
+}
+function lerpR(a,b,mix){
+  const m=ss(mix);
+  return{r:a.r*(1-m)+b.r*m,g:a.g*(1-m)+b.g*m,b:a.b*(1-m)+b.b*m,
+    amp:a.amp*(1-m)+b.amp*m,alpha:a.alpha*(1-m)+b.alpha*m};
+}
+function smo(c,tg,k){ return c+(tg-c)*k; }
+
+function drawPulse(p,now){
+  const elapsed=(now-p.born)/p.life;
+  if(elapsed>=1) return false;
+  p.radius=p.maxRadius*(1-Math.pow(1-Math.min(1,elapsed*1.2),3));
+  // alive mas sem desenhar aqui — a iluminação das linhas é feita no loop principal
+  return true;
+}
+
+function drawGhostCircle(p,now,ctx){
+  const elapsed=(now-p.born)/p.life;
+  if(elapsed>=1||p.radius<=0) return;
+  // círculo fantasma muito sutil
+  const ghostAlpha=p.alpha*0.06*Math.pow(1-elapsed,2.5);
+  if(ghostAlpha<0.003) return;
+  const h=p.hue;
+  const r=Math.round(rA*(1-h)+rC*h);
+  const g=Math.round(gA*(1-h)+gC*h);
+  const b=Math.round(bA*(1-h)+bC*h);
+  ctx.beginPath(); ctx.arc(p.x,p.y,p.radius,0,Math.PI*2);
+  ctx.strokeStyle=`rgba(${r},${g},${b},${ghostAlpha})`;
+  ctx.lineWidth=0.8; ctx.stroke();
+}
+
+// Calcula iluminação cromática de uma linha X pelo conjunto de pulsos ativos
+function getPulseColorInfluence(lineX,now){
+  let totalR=0,totalG=0,totalB=0,totalAlpha=0;
+  for(const p of pulses){
+    if(!p.alive||p.radius<=0) continue;
+    const elapsed=(now-p.born)/p.life;
+    if(elapsed>=1) continue;
+
+    // distância horizontal entre a linha e a circunferência do pulso
+    const dx=Math.abs(lineX-p.x);
+    const ringThickness=14+p.maxRadius*0.08;
+
+    if(dx>p.radius+ringThickness) continue; // linha fora do alcance
+    if(dx>p.maxRadius+ringThickness) continue;
+
+    // quão perto a linha está da frente da onda (circunferência)
+    const distToRing=Math.abs(dx-p.radius);
+    if(distToRing>ringThickness) continue;
+
+    // intensidade: gaussiana centrada na frente da onda
+    const ringNorm=distToRing/ringThickness;
+    const ringIntensity=Math.exp(-ringNorm*ringNorm*4);
+
+    // fade out com o tempo
+    const fade=Math.pow(1-elapsed,1.6)*p.alpha;
+    const inf=ringIntensity*fade;
+
+    if(inf<0.005) continue;
+
+    const h=p.hue;
+    totalR+=rA*(1-h)*inf + rC*h*inf;
+    totalG+=gA*(1-h)*inf + gC*h*inf;
+    totalB+=bA*(1-h)*inf + bC*h*inf;
+    totalAlpha=Math.min(1,totalAlpha+inf*0.85);
+  }
+  return{r:totalR,g:totalG,b:totalB,alpha:totalAlpha};
+}
+
+// Calcula a posição Y dos dois pontos de interseção da frente de onda com a linha lineX
+// Retorna array de {yCenter, radius_v, inf} para colorir segmentos verticais
+function getPulseVerticalPoints(lineX,now){
+  const points=[];
+  for(const p of pulses){
+    if(!p.alive||p.radius<=0) continue;
+    const elapsed=(now-p.born)/p.life;
+    if(elapsed>=1) continue;
+
+    const dx=lineX-p.x;
+    const r=p.radius;
+    const ringThickness=14+p.maxRadius*0.08;
+
+    // a frente de onda só atinge esta linha se |dx| <= r + ringThickness
+    if(Math.abs(dx)>r+ringThickness) continue;
+
+    // distância da linha ao anel
+    const distToRing=Math.abs(Math.abs(dx)-r);
+    if(distToRing>ringThickness) continue;
+
+    const ringNorm=distToRing/ringThickness;
+    const ringIntensity=Math.exp(-ringNorm*ringNorm*4);
+    const fade=Math.pow(1-elapsed,1.6)*p.alpha;
+    const inf=ringIntensity*fade;
+    if(inf<0.005) continue;
+
+    // pontos Y de interseção do círculo com a linha vertical
+    const r2=r*r-dx*dx;
+    if(r2<0) {
+      // linha fora do círculo mas dentro do ringThickness — ponto mais próximo
+      points.push({yCenter:p.y, spread:ringThickness*1.5, inf, hue:p.hue});
+    } else {
+      const dy=Math.sqrt(r2);
+      // dois pontos: p.y+dy e p.y-dy
+      const spread=ringThickness*1.2+(r*0.04);
+      points.push({yCenter:p.y+dy, spread, inf, hue:p.hue});
+      points.push({yCenter:p.y-dy, spread, inf, hue:p.hue});
+    }
+  }
+  return points;
+}
+
+// ── LOOP ──────────────────────────────────────────────────────────────────────
+let t_=0, frame=0;
+const phaseEl=document.getElementById('phase');
+const hintEl=document.getElementById('hint');
+
+function draw(){
+  const W=canvas.width, H=canvas.height;
+  const intensity=document.getElementById('intensity').value/100;
+  const now=performance.now();
+
+  if(analyser&&started){
+    analyser.getByteFrequencyData(analyserData);
+    let sum=0; for(let i=0;i<analyserData.length;i++) sum+=analyserData[i];
+    analyserSmooth=smo(analyserSmooth,sum/(analyserData.length*255),0.06);
+  }
+
+  ctx.fillStyle='#031a16'; ctx.fillRect(0,0,W,H);
+
+  const pos=frame%TOTAL;
+  let acc=0,seg=null,segPos=0,segIdx=0;
+  for(let i=0;i<SEQ.length;i++){
+    if(pos<acc+SEQ[i].dur){seg=SEQ[i];segPos=pos-acc;segIdx=i;break;}
+    acc+=SEQ[i].dur;
+  }
+
+  if(seg.type==='hold'){
+    phaseEl.textContent=PHASE_LABELS[seg.phase]||''; phaseEl.style.opacity='1';
+  } else {
+    phaseEl.textContent=`\u2192 ${seg.to}`; phaseEl.style.opacity='0.4';
+  }
+
+  // atualiza raio dos pulsos
+  for(let i=pulses.length-1;i>=0;i--){
+    pulses[i].alive=drawPulse(pulses[i],now);
+    if(!pulses[i].alive) pulses.splice(i,1);
+  }
+
+  let sumL=0,sumR=0,sumC=0,sumT=0,cntL=0,cntR=0,cntC=0;
+  const step=W/N;
+
+  for(let i=0;i<N;i++){
+    const norm=i/(N-1);
+    let res;
+    if(seg.type==='hold') res=getAmp(seg.phase,norm,t_);
+    else{ const a=getAmp(seg.from,norm,t_),b=getAmp(seg.to,norm,t_); res=lerpR(a,b,segPos/seg.dur); }
+
+    const amp=res.amp||0; sumT+=amp;
+    if(norm<0.35){sumL+=amp;cntL++;}
+    else if(norm>0.65){sumR+=amp;cntR++;}
+    else{sumC+=amp;cntC++;}
+
+    const feedbackBoost=1+analyserSmooth*intensity*0.6;
+    const lineX=i*step+step/2;
+
+    const vPoints=getPulseVerticalPoints(lineX,now);
+
+    const baseAlpha=Math.min(1,res.alpha*feedbackBoost);
+    const br=Math.min(255,Math.round(res.r*baseAlpha*2.2));
+    const bg=Math.min(255,Math.round(res.g*baseAlpha*2.2));
+    const bb=Math.min(255,Math.round(res.b*baseAlpha*2.2));
+    ctx.strokeStyle=`rgba(${br},${bg},${bb},${baseAlpha})`;
+    ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(lineX,0); ctx.lineTo(lineX,H); ctx.stroke();
+
+    for(const vp of vPoints){
+      const h=vp.hue;
+      const pr=Math.round(rA*(1-h)+rC*h);
+      const pg=Math.round(gA*(1-h)+gC*h);
+      const pb=Math.round(bA*(1-h)+bC*h);
+      const spread=vp.spread;
+      const y0=Math.max(0, vp.yCenter-spread);
+      const y1=Math.min(H, vp.yCenter+spread);
+      if(y1<=y0) continue;
+      const grad=ctx.createLinearGradient(lineX,y0,lineX,y1);
+      const peak=Math.min(0.95, vp.inf*1.2);
+      grad.addColorStop(0,   `rgba(${pr},${pg},${pb},0)`);
+      grad.addColorStop(0.35,`rgba(${pr},${pg},${pb},${(peak*0.6).toFixed(3)})`);
+      grad.addColorStop(0.5, `rgba(${pr},${pg},${pb},${peak.toFixed(3)})`);
+      grad.addColorStop(0.65,`rgba(${pr},${pg},${pb},${(peak*0.6).toFixed(3)})`);
+      grad.addColorStop(1,   `rgba(${pr},${pg},${pb},0)`);
+      ctx.strokeStyle=grad;
+      ctx.lineWidth=1.8;
+      ctx.beginPath(); ctx.moveTo(lineX,y0); ctx.lineTo(lineX,y1); ctx.stroke();
+    }
+  }
+
+  for(const p of pulses){
+    if(p.alive) drawGhostCircle(p,now,ctx);
+  }
+
+  const nL=sumL/(cntL||1),nR=sumR/(cntR||1),nC=sumC/(cntC||1),nT=sumT/N;
+  const zones={left:nL,right:nR,center:nC,total:nT};
+
+  if(started&&playing&&audioCtx&&audioCtx.state==='running'){
+    const anow=audioCtx.currentTime;
+    const activeCount=SEG_NOTES[segIdx]||1;
+    const isClimax=segIdx===6;
+    const climaxBlend=isClimax?1:(segIdx===5?ss(segPos/SEQ[segIdx].dur):(segIdx===7?ss(1-segPos/SEQ[segIdx].dur):0));
+
+    delayFeedGain.gain.setTargetAtTime(intensity*0.28,anow,0.5);
+    delayNode.delayTime.setTargetAtTime(0.38+nC*0.12,anow,0.8);
+    shaper.curve=makeShaperCurve(intensity*0.35*climaxBlend);
+    shaperGain.gain.setTargetAtTime(intensity*0.5*climaxBlend+0.001,anow,0.3);
+
+    NOTE_NAMES.forEach((name,i)=>{
+      let activeLevel;
+      if(seg.type==='morph'){
+        const prev=i<(SEG_NOTES[Math.max(0,segIdx-1)]||1)?1:0;
+        const next=i<(SEG_NOTES[Math.min(SEQ.length-1,segIdx+1)]||1)?1:0;
+        activeLevel=prev*(1-ss(segPos/seg.dur))+next*ss(segPos/seg.dur);
+      } else activeLevel=i<activeCount?1:0;
+      const zAmp=zones[NOTE_ZONES[i]]||0;
+      const target=activeLevel*BASE_VOLS[i]*(0.2+zAmp*0.8);
+      smoothed[i]=smo(smoothed[i],target,0.03);
+      gains[i].gain.setTargetAtTime(smoothed[i],anow,0.15);
+      oscs[i].detune.setTargetAtTime((zAmp-0.5)*8,anow,0.5);
+      if(noteEls[i]){
+        if(activeLevel>0.01){
+          noteEls[i].style.color      =`rgba(93,202,165,${0.3+activeLevel*0.65})`;
+          noteEls[i].style.borderColor=`rgba(93,202,165,${0.1+activeLevel*0.45})`;
+          noteEls[i].style.background =`rgba(93,202,165,${activeLevel*0.08})`;
+        } else {
+          noteEls[i].style.color      ='rgba(93,202,165,0.12)';
+          noteEls[i].style.borderColor='rgba(93,202,165,0.06)';
+          noteEls[i].style.background ='transparent';
+        }
+      }
+    });
+
+    sFilter=smo(sFilter,200+nT*3000+nC*300+analyserSmooth*intensity*800,0.025);
+    filter.frequency.setTargetAtTime(sFilter,anow,0.2);
+    lfo.frequency.setTargetAtTime(0.04+nC*0.09+climaxBlend*0.05,anow,1.0);
+    lfoGain.gain.setTargetAtTime(4+intensity*6+climaxBlend*3,anow,0.5);
+  }
+
+  t_+=0.014; frame++;
+  requestAnimationFrame(draw);
+}
+
+draw();
+
+// ── BOTÃO oscilloID → PORTFOLIO ───────────────────────────────────────────────
+const btnPortfolio = document.getElementById('btn-portfolio');
+const campoOverlay = document.getElementById('campo-overlay');
+
+btnPortfolio.addEventListener('click', () => {
+  // fade out do áudio
+  if(started && playing) fadeOut();
+
+  // inicia fade visual (7s via CSS transition)
+  campoOverlay.classList.add('active');
+
+  // após 7s (overlay quase opaco), navega para o portfolio
+  setTimeout(() => {
+    // passa flag para o portfolio saber que veio do campo
+    sessionStorage.setItem('fromCampo', '1');
+    window.location.href = 'index.html';
+  }, 7200);
+});
+
+// Se voltou do portfolio, campo já está visível — sem ação extra
+if(sessionStorage.getItem('returningToCampo')) {
+  sessionStorage.removeItem('returningToCampo');
+}
+</script>
+</body>
+</html>
