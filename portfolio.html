@@ -1057,10 +1057,17 @@
       comp.connect(pAudio._rev);
       pAudio._out = comp;
 
+      // Low-pass filter global — amortece altas frequências, torna tudo mais atmosférico
+      pAudio._lpf = pAudio.createBiquadFilter();
+      pAudio._lpf.type = 'lowpass';
+      pAudio._lpf.frequency.value = 900;
+      pAudio._lpf.Q.value = 0.7;
+      pAudio._lpf.connect(comp);
+
       pReady = true;
     }
 
-    // ── tom suave — sine com envelope breve
+    // ── tom suave — sine com envelope breve, passa pelo LPF
     function pTone(freq, vol, attack, sustain, release, detune) {
       if (!pReady) return;
       const now = pAudio.currentTime;
@@ -1069,7 +1076,7 @@
       osc.type = 'sine';
       osc.frequency.value = freq;
       if (detune) osc.detune.value = detune;
-      osc.connect(env); env.connect(pAudio._out);
+      osc.connect(env); env.connect(pAudio._lpf);
       env.gain.setValueAtTime(0, now);
       env.gain.linearRampToValueAtTime(vol, now + attack);
       env.gain.setValueAtTime(vol, now + attack + sustain);
@@ -1078,7 +1085,7 @@
       osc.stop(now + attack + sustain + release + 0.05);
     }
 
-    // ── HOVER nos cards — sine ultrabreve, altíssimo, quase inaudível
+    // ── HOVER nos cards — sine ultrabreve, quase imperceptível
     let lastHoverTime = 0;
     function soundHover() {
       const now = Date.now();
@@ -1086,10 +1093,10 @@
       lastHoverTime = now;
       if (!pReady) return;
       const freq = P_SCALE[Math.floor(Math.random() * 4) + 5]; // notas altas
-      pTone(freq * 2, 0.028, 0.006, 0.012, 0.06, (Math.random() - 0.5) * 6);
+      pTone(freq, 0.020, 0.018, 0.012, 0.12, (Math.random() - 0.5) * 6);
     }
 
-    // ── CLICK em nav / botões — intervalo de 2ª menor da pentatônica, suave
+    // ── CLICK em nav / botões — dois tones suaves da pentatônica
     let clickIdx = 0;
     function soundClick() {
       if (!pReady) return;
@@ -1097,8 +1104,8 @@
       const f1 = P_SCALE[i];
       const f2 = P_SCALE[(i + 2) % P_SCALE.length];
       clickIdx++;
-      pTone(f1, 0.055, 0.004, 0.02, 0.22, 0);
-      setTimeout(() => pTone(f2, 0.038, 0.004, 0.015, 0.28, 3), 60);
+      pTone(f1, 0.038, 0.012, 0.02, 0.32, 0);
+      setTimeout(() => pTone(f2, 0.026, 0.012, 0.015, 0.38, 3), 70);
     }
 
     // ── SCROLL REVEAL dos cards — acorde etéreo de 2 notas, attack lento
@@ -1109,8 +1116,8 @@
       revealIdx++;
       const f1 = P_SCALE[i];
       const f2 = P_SCALE[(i + 4) % P_SCALE.length]; // 5ª
-      pTone(f1, 0.042, 0.18, 0.12, 0.55, -2);
-      pTone(f2, 0.028, 0.22, 0.08, 0.60,  2);
+      pTone(f1, 0.029, 0.28, 0.12, 0.70, -2);
+      pTone(f2, 0.020, 0.34, 0.08, 0.75,  2);
     }
 
     // ── RETORNO AO CAMPO — sine grave que sobe enquanto escurece
@@ -1120,13 +1127,13 @@
       const osc = pAudio.createOscillator();
       const env = pAudio.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(110, now);                    // A2
-      osc.frequency.linearRampToValueAtTime(220, now + 3.2);     // sobe uma oitava
-      osc.connect(env); env.connect(pAudio._out);
+      osc.frequency.setValueAtTime(110, now);
+      osc.frequency.linearRampToValueAtTime(220, now + 3.2);
+      osc.connect(env); env.connect(pAudio._lpf);
       env.gain.setValueAtTime(0, now);
-      env.gain.linearRampToValueAtTime(0.07, now + 0.4);
-      env.gain.linearRampToValueAtTime(0.05, now + 2.8);
-      env.gain.linearRampToValueAtTime(0,    now + 3.5);
+      env.gain.linearRampToValueAtTime(0.049, now + 0.5);
+      env.gain.linearRampToValueAtTime(0.035, now + 2.8);
+      env.gain.linearRampToValueAtTime(0,     now + 3.5);
       osc.start(now); osc.stop(now + 3.6);
     }
 

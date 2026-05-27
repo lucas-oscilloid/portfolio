@@ -186,6 +186,9 @@
     45%  { color:rgba(93,202,165,0.60);  border-color:rgba(93,202,165,0.28);  box-shadow:0 0 4px  rgba(93,202,165,0.06);  }
     100% { color:rgba(180,255,220,0.92); border-color:rgba(180,255,220,0.55); box-shadow:0 0 12px rgba(180,255,220,0.18); }
   }
+  @keyframes label-in  { from { opacity:0; } to { opacity:1; } }
+  @keyframes label-out { from { opacity:1; } to { opacity:0; } }
+
   #btn-portfolio {
     position:fixed;
     bottom:max(28px, env(safe-area-inset-bottom, 28px));
@@ -198,11 +201,11 @@
     box-shadow:0 0 12px rgba(180,255,220,0.18);
     padding:9px 16px;
     cursor:pointer; z-index:20;
-    min-height:44px;
+    min-height:44px; min-width:110px;
     display:flex; align-items:center; justify-content:center;
     animation: oscilloID-pulse 2.8s ease-in-out infinite;
     -webkit-tap-highlight-color:transparent;
-    white-space:nowrap;
+    white-space:nowrap; position:fixed;
   }
   #btn-portfolio:hover {
     animation:none;
@@ -212,6 +215,15 @@
     box-shadow:0 0 20px rgba(180,255,220,0.28);
   }
   #btn-portfolio:active { background:rgba(180,255,220,0.1); }
+
+  /* labels sobrepostos para crossfade */
+  #btn-portfolio .lbl {
+    position:absolute; left:0; right:0;
+    display:flex; align-items:center; justify-content:center;
+    transition: opacity 0.9s ease;
+  }
+  #btn-portfolio .lbl-a { opacity:1; }
+  #btn-portfolio .lbl-b { opacity:0; }
 
   /* ── BOTÃO AJUDA — canto superior esquerdo ─────────────────────────────── */
   #btn-help {
@@ -241,13 +253,13 @@
     top:max(68px, env(safe-area-inset-top, 20px) + 56px);
     left:max(20px, env(safe-area-inset-left, 20px));
     z-index:30;
-    width:min(280px, calc(100vw - 40px));
+    width:min(340px, calc(100vw - 40px));
     background:rgba(3,22,18,0.82);
     backdrop-filter:blur(18px) saturate(1.4);
     -webkit-backdrop-filter:blur(18px) saturate(1.4);
     border:0.5px solid rgba(93,202,165,0.18);
     border-radius:4px;
-    padding:24px 22px 20px;
+    padding:28px 26px 24px;
     pointer-events:none;
     opacity:0;
     transform:translateY(-8px);
@@ -260,29 +272,29 @@
   }
   #help-modal h3 {
     font-family:'Courier New',monospace;
-    font-size:8px; letter-spacing:0.35em; text-transform:uppercase;
+    font-size:9px; letter-spacing:0.35em; text-transform:uppercase;
     color:rgba(93,202,165,0.55);
-    margin-bottom:18px;
+    margin-bottom:20px;
   }
   .help-row {
     display:grid; grid-template-columns:1fr 1fr;
-    gap:6px 10px; margin-bottom:6px;
+    gap:8px 14px; margin-bottom:8px;
   }
   .help-key {
     font-family:'Courier New',monospace;
-    font-size:8px; letter-spacing:0.08em;
-    color:rgba(93,202,165,0.40);
+    font-size:10px; letter-spacing:0.06em;
+    color:rgba(93,202,165,0.45);
     padding-top:1px;
   }
   .help-val {
     font-family:'Courier New',monospace;
-    font-size:8px; letter-spacing:0.06em; line-height:1.6;
-    color:rgba(180,230,215,0.72);
+    font-size:10px; letter-spacing:0.04em; line-height:1.65;
+    color:rgba(180,230,215,0.80);
   }
   .help-divider {
     height:0.5px;
     background:rgba(93,202,165,0.10);
-    margin:14px 0;
+    margin:16px 0;
   }
 
   /* ── OVERLAY DE SAÍDA DO CAMPO ─────────────────────────────────────────────── */
@@ -339,7 +351,10 @@
 <div id="noteui"></div>
 
 <!-- BOTÃO oscilloID → portfolio -->
-<button id="btn-portfolio" aria-label="oscilloID — portfolio">oscilloID</button>
+<button id="btn-portfolio" aria-label="oscilloID — portfolio">
+  <span class="lbl lbl-a">oscilloID</span>
+  <span class="lbl lbl-b">portfolio</span>
+</button>
 
 <!-- PLAY/PAUSE — sempre visível -->
 <button id="btn-play" aria-label="play/pause">
@@ -1050,6 +1065,28 @@ document.addEventListener('click', (e) => {
     helpModal.classList.remove('open');
   }
 });
+
+// ── CROSSFADE oscilloID ↔ portfolio ──────────────────────────────────────────
+const lblA = document.querySelector('#btn-portfolio .lbl-a');
+const lblB = document.querySelector('#btn-portfolio .lbl-b');
+let lblState = 'a'; // 'a' = oscilloID visível
+
+function crossfadeLabel() {
+  if (lblState === 'a') {
+    lblA.style.opacity = '0';
+    lblB.style.opacity = '1';
+    lblState = 'b';
+  } else {
+    lblA.style.opacity = '1';
+    lblB.style.opacity = '0';
+    lblState = 'a';
+  }
+}
+// alterna a cada 2.5s, offset de 1s para não coincidir com o início
+setTimeout(() => {
+  crossfadeLabel();
+  setInterval(crossfadeLabel, 2500);
+}, 1800);
 
 // ── BOTÃO oscilloID → PORTFOLIO ───────────────────────────────────────────────
 const btnPortfolio = document.getElementById('btn-portfolio');
